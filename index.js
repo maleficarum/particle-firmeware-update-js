@@ -5,6 +5,7 @@ const particle = new Particle();
 const argv = require('minimist')(process.argv.slice(2));
 const fs = require("fs");
 const md5File = require('md5-file');
+var Walker = require('walker');
 
 var config;
 var flashList = [];
@@ -35,14 +36,24 @@ module.exports = {
     }
   },
   start: function() {
+    if(config.token == undefined) {
+      log.error("Token not present ...");
+      process.exit(-1);
+    }
+
     particle.getEventStream({ deviceId: 'mine', name:'spark/status', auth: config.token}).then(function(stream) {
       stream.on('event', function(data) {
         //data = online
         //deviceid = coreid
         //published_at
         if(data.data == "online") {
+          //If the firmware was not set, look for the last version of it
+          if(config.firmware == undefined) {
+            log.debug("Firmware not set ... looking at ./firmware/firmware.bin");
+            config.firmware = "./firmware/firmware.bin"
+          }
+
           log.info("The device " + data.coreid + " is online; flashing firmware " + config.firmware);
-          //////
 
           const hash = md5File.sync(config.firmware);
           var firmware;
@@ -80,7 +91,6 @@ module.exports = {
               log.warn("Device " + data.coreid + " already flashed");
             }
           }
-          //////
         }
       });
     });
@@ -108,6 +118,25 @@ var flashDevice = function(firmware, token, device) {
     if (err) {
       log.error('Flash failed ', err);
     }
-    console.log('Flash done ', body.status);
+    log.info('Flash sent : ', body.status);
+  });
+};
+
+var getLastFirmware = function() {
+  var currentVersion = 0;
+  var firmware;
+  Walker('./firmware').on('file', function(file) {
+    //TODO this has to be a more complex regexp
+    var reg = new RegExp(".bin$");
+    if(reg.test(file)) {
+      var version = parseFloat(file.split("\.bin")[0].split("firmware/")[1].split("-")[1]);
+      if(version > currentVersion) {
+        currentVersion = version;
+        firmware = file;
+      }
+    }
+  }).on('end', function() {
+    console.log("REGRESANDO " + firmware);
+      return firmware;
   });
 };
