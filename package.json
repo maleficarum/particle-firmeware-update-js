@@ -1,6 +1,6 @@
 {
   "name": "particle-firmware-update-js",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Particle module for node js that listen for online devices and pushes a firmware to that device.",
   "main": "index.js",
   "scripts": {
