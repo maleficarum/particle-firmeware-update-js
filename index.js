@@ -5,7 +5,6 @@ const particle = new Particle();
 const argv = require('minimist')(process.argv.slice(2));
 const fs = require("fs");
 const md5File = require('md5-file');
-var Walker = require('walker');
 
 var config;
 var flashList = [];
@@ -119,24 +118,5 @@ var flashDevice = function(firmware, token, device) {
       log.error('Flash failed ', err);
     }
     log.info('Flash sent : ', body.status);
-  });
-};
-
-var getLastFirmware = function() {
-  var currentVersion = 0;
-  var firmware;
-  Walker('./firmware').on('file', function(file) {
-    //TODO this has to be a more complex regexp
-    var reg = new RegExp(".bin$");
-    if(reg.test(file)) {
-      var version = parseFloat(file.split("\.bin")[0].split("firmware/")[1].split("-")[1]);
-      if(version > currentVersion) {
-        currentVersion = version;
-        firmware = file;
-      }
-    }
-  }).on('end', function() {
-    console.log("REGRESANDO " + firmware);
-      return firmware;
   });
 };
