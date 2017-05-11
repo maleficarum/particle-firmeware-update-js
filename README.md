@@ -46,6 +46,14 @@ node app.js --token=<token> --firmware=./firmware.bin
 
 ```
 
+Or even you can use the default firmware location (./firmware/firmware.bin):
+
+```bash
+
+node app.js --token=<token>
+
+```
+
 #### Start
 
 For listening for events you have to
