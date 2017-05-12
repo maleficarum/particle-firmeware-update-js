@@ -46,10 +46,8 @@ module.exports = {
       process.exit(-1);
     }
 
-    updater.configure({ "token": config.token });
   },
   start: function() {
-    updater.start();
 
     particle.getEventStream({ deviceId: 'mine', name:'spark/status', auth: config.token}).then(function(stream) {
       stream.on('event', function(data) {
