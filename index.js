@@ -5,9 +5,12 @@ const particle = new Particle();
 const argv = require('minimist')(process.argv.slice(2));
 const fs = require("fs");
 const md5File = require('md5-file');
+var updater = require('particle-firmware-update-js');
 
 var config;
 var flashList = [];
+
+const FIRMWARE_LOCATION = './firmware';
 
 const log = bunyan.createLogger({
   name: "ParticleFirmwareUpdater",
@@ -33,12 +36,20 @@ module.exports = {
       config.firmware = argv["firmware"];
       log.debug("Using command line firmware argument");
     }
-  },
-  start: function() {
+    if(argv["firmware-location"] != null) {
+      config.firmwareLocation = argv["firmware-location"];
+      log.debug("Using command line firmware location argument");
+    }
+
     if(config.token == undefined) {
       log.error("Token not present ...");
       process.exit(-1);
     }
+
+    updater.configure({ "token": config.token });
+  },
+  start: function() {
+    updater.start();
 
     particle.getEventStream({ deviceId: 'mine', name:'spark/status', auth: config.token}).then(function(stream) {
       stream.on('event', function(data) {
@@ -47,9 +58,14 @@ module.exports = {
         //published_at
         if(data.data == "online") {
           //If the firmware was not set, look for the last version of it
+          if(config.firmwareLocation == undefined) {
+            log.debug("Firmware location not defined ... using default pointing to " + FIRMWARE_LOCATION);
+            config.firmwareLocation = FIRMWARE_LOCATION;
+          }
+
           if(config.firmware == undefined) {
-            log.debug("Firmware not set ... looking at ./firmware/firmware.bin");
-            config.firmware = "./firmware/firmware.bin"
+            log.debug("Firmware not set ... looking at " + config.firmwareLocation + "firmware.bin");
+            config.firmware = config.firmwareLocation + "/firmware.bin"
           }
 
           log.info("The device " + data.coreid + " is online; flashing firmware " + config.firmware);
