@@ -32,13 +32,21 @@ module.exports = {
       config.token = argv["token"];
       log.debug("Using command line token argument");
     }
-    if(argv["firmware"] != null) {
-      config.firmware = argv["firmware"];
-      log.debug("Using command line firmware argument");
-    }
+
     if(argv["firmware-location"] != null) {
       config.firmwareLocation = argv["firmware-location"];
-      log.debug("Using command line firmware location argument");
+      log.debug("Using command line firmware location argument : " + config.firmwareLocation);
+    } else {
+      config.firmwareLocation = FIRMWARE_LOCATION;
+      log.info("Using default firmware location as " + config.firmwareLocation);
+    }
+
+    if(argv["firmware"] != null) {
+      config.firmware = config.firmwareLocation + "/" + argv["firmware"];
+      log.debug("Using command line firmware argument : " + config.firmware);
+    } else {
+      config.firmware = config.firmwareLocation + "/firmware.bin";
+      log.info("Using default firmware : " + config.firmware);
     }
 
     if(config.token == undefined) {
@@ -55,16 +63,6 @@ module.exports = {
         //deviceid = coreid
         //published_at
         if(data.data == "online") {
-          //If the firmware was not set, look for the last version of it
-          if(config.firmwareLocation == undefined) {
-            log.debug("Firmware location not defined ... using default pointing to " + FIRMWARE_LOCATION);
-            config.firmwareLocation = FIRMWARE_LOCATION;
-          }
-
-          if(config.firmware == undefined) {
-            log.debug("Firmware not set ... looking at " + config.firmwareLocation + "firmware.bin");
-            config.firmware = config.firmwareLocation + "/firmware.bin"
-          }
 
           log.info("The device " + data.coreid + " is online; flashing firmware " + config.firmware);
 
@@ -123,14 +121,11 @@ module.exports = {
 };
 
 var flashDevice = function(firmware, token, device) {
-  var formData = {
-    file: fs.createReadStream(firmware),
-    file_type: "binary"
-  };
-  request.put({url:'https://api.particle.io/v1/devices/' + device + '?access_token=' + token, formData: formData}, function optionalCallback(err, httpResponse, body) {
-    if (err) {
-      log.error('Flash failed ', err);
-    }
-    log.info('Flash sent : ', body);
-  });
+  var flashProcess = particle.flashDevice({ deviceId: device, files: { file1: firmware }, auth: token });
+
+  flashProcess.then(function(data) {
+      log.info('Device flashing started successfully:', data);
+    }, function(err) {
+      log.error('An error occurred while flashing the device:', err);
+    });
 };

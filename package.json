@@ -1,6 +1,6 @@
 {
   "name": "particle-firmware-update-js",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Particle module for node js that listen for online devices and pushes a firmware to that device.",
   "main": "index.js",
   "scripts": {
@@ -27,7 +27,6 @@
     "bunyan": "^1.8.10",
     "md5-file": "^3.1.1",
     "minimist": "^1.2.0",
-    "particle-api-js": "^6.4.3",
-    "request": "^2.81.0"
+    "particle-api-js": "6.0.2"
   }
 }
