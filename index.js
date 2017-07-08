@@ -25,7 +25,7 @@ const log = bunyan.createLogger({
 
 module.exports = {
   configure: function(c) {
-    config = c;
+    config = c || {};
 
     //Check for command line args to override the config
     if(argv["token"] != null) {
@@ -131,6 +131,6 @@ var flashDevice = function(firmware, token, device) {
     if (err) {
       log.error('Flash failed ', err);
     }
-    log.info('Flash sent : ', body.status);
+    log.info('Flash sent : ', body);
   });
 };
