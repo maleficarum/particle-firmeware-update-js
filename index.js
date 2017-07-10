@@ -16,6 +16,7 @@ var flashList = [];
 var db = {};
 
 const FIRMWARE_LOCATION = './firmware';
+const FIRMWARE_NAME = "firmware.bin";
 
 const log = bunyan.createLogger({
   name: "ParticleFirmwareUpdater",
@@ -60,12 +61,10 @@ module.exports = {
 
     //Always we'll look for this file, otherwise we'll look at the database
     if(argv["firmware"] != undefined ) {
-      config.firmware = config.firmwareLocation + "/" + argv["firmware"];
-      log.debug("Using command line firmware argument : " + argv["firmware"]);
-    } else if(config.firmware != undefined) {
-      config.firmware = config.firmwareLocation + "/" + config.firmware;
-      log.debug("Using firmware as : " + config.firmware);
+      config.firmware = argv["firmware"];
     }
+
+    log.info("Using firmware " + config.firmware);
 
     if(argv["db-location"] != null || config.dbLocation != null) {
       config.dbLocation = argv["db-location"] || config.dbLocation;
@@ -97,11 +96,9 @@ module.exports = {
 
           //If the firmware name is defined we're going to use it
           if(config.firmware != undefined) {
-            console.log(config.firmware);
-            const hash = md5File.sync(config.firmware);
-
+            config.firmware = FIRMWARE_NAME;
             fetchDevice(data, config.firmware, function() {
-              console.log("Found");
+              //console.log("Found custom");
             });
 
           } else {
@@ -113,8 +110,8 @@ module.exports = {
               } else {
                 const firmware = firmwareList[0];
 
-                fetchDevice(data, config.firmwareLocation + "/" + firmware.name, function() {
-                  console.log("Found");
+                fetchDevice(data, firmware.name, function() {
+                  //console.log("Found registrered");
                 });
               }
             });
@@ -137,12 +134,17 @@ module.exports = {
 
     fs.watch(config.firmwareLocation, (eventType, filename) => {
       const path = config.firmwareLocation + "/" + filename;
+
       fs.stat(path, function(err, stat) {
         if(err) {//The firmware doesn't exist anymore
           db.firmware.remove({ "name": filename }, { multi: true }, function (err, numRemoved) {
             log.info("Removed " + numRemoved + " firmware definitions");
           });
         } else {
+          if(stat.isDirectory()) {
+            log.debug("New directory created " + filename);
+            return;
+          }
           log.info("New firmware detected " + filename);
           const hash = md5File.sync(path);
 
@@ -167,30 +169,42 @@ module.exports = {
 };
 
 var fetchDevice = function(data, firmware, callback) {
-  const hash = md5File.sync(firmware);
-  //Check for each device
-  db.device.findOne({ device: data.coreid, firmwareHash: hash }, function (err, device) {
-    if(device == undefined) {
-      log.info("Device doesn't have this firmware");
-      flashDevice(firmware, config.token, data.coreid, hash);
-      callback();
-    } else {
-      log.warn("Device " + data.coreid + " already flashed");
+  var path = config.firmwareLocation + "/" + data.coreid + ".bin";
+
+  fs.stat(path, function(err, stat) {
+    if(err) {
+      path = config.firmwareLocation + "/" + firmware;
     }
+
+    const hash = md5File.sync(path);
+    //Check for each device
+    db.device.findOne({ device: data.coreid, firmwareHash: hash }, function (err, device) {
+      if(device == undefined) {
+        log.info("Device doesn't have this firmware");
+        flashDevice(path, config.token, data.coreid, hash);
+        callback();
+      } else {
+        log.warn("Device " + data.coreid + " already flashed");
+      }
+    });
   });
 };
+
 var flashDevice = function(firmware, token, device, hash) {
+
+  log.info("Flashing device " + device + " with firmware " + firmware);
+
   var flashProcess = particle.flashDevice({ deviceId: device, files: { file1: firmware }, auth: token });
 
   flashProcess.then(function(data) {
-      db.device.insert({"device": device, flashedAt: new Date(), firmwareHash: hash}, function (err, document) {
-        if(err) {
-          log.error("Error saving device flash process ", err);
-        } else {
-          log.info('Device flashing started successfully ', data);
-        }
-      });
-    }, function(err) {
-      log.error('An error occurred while flashing the device ', err);
+    db.device.insert({"device": device, flashedAt: new Date(), firmwareHash: hash}, function (err, document) {
+      if(err) {
+        log.error("Error saving device flash process ", err);
+      } else {
+        log.info('Device flashing started successfully ', data);
+      }
     });
+  }, function(err) {
+    log.error('An error occurred while flashing the device ', err);
+  });
 };
