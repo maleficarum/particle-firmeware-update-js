@@ -50,6 +50,9 @@ module.exports = {
     if(argv["firmware"] != undefined ) {
       config.firmware = config.firmwareLocation + "/" + argv["firmware"];
       log.debug("Using command line firmware argument : " + argv["firmware"]);
+    } else if(config.firmware != undefined) {
+      config.firmware = config.firmwareLocation + "/" + config.firmware;
+      log.debug("Using firmware as : " + config.firmware);
     }
 
     if(argv["db-location"] != null || config.dbLocation != null) {
@@ -71,11 +74,11 @@ module.exports = {
           log.info("The device " + data.coreid + " is online");
 
           //If the firmware name is defined we're going to use it
-          //TODO Validate this function
           if(config.firmware != undefined) {
+            console.log(config.firmware);
             const hash = md5File.sync(config.firmware);
 
-            fetchDevice(data, config.firmwareLocation + "/" + config.firmware, function() {
+            fetchDevice(data, config.firmware, function() {
               console.log("Found");
             });
 
