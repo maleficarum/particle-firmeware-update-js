@@ -5,10 +5,11 @@ const particle = new Particle();
 const argv = require('minimist')(process.argv.slice(2));
 const fs = require("fs");
 const md5File = require('md5-file');
-var updater = require('particle-firmware-update-js');
+const Datastore = require('nedb');
 
 var config;
 var flashList = [];
+var db = {};
 
 const FIRMWARE_LOCATION = './firmware';
 
@@ -28,79 +29,70 @@ module.exports = {
     config = c || {};
 
     //Check for command line args to override the config
-    if(argv["token"] != null) {
-      config.token = argv["token"];
-      log.debug("Using command line token argument");
+    if(config.token == undefined) {
+      if(argv["token"] == undefined) {
+        log.error("Token not present ...");
+        process.exit(-1);
+      } else {
+        config.token = argv["token"];
+      }
     }
 
-    if(argv["firmware-location"] != null) {
+    if(argv["firmware-location"] != undefined) {
       config.firmwareLocation = argv["firmware-location"];
-      log.debug("Using command line firmware location argument : " + config.firmwareLocation);
+      log.info("Using command line firmware location argument : " + config.firmwareLocation);
     } else {
       config.firmwareLocation = FIRMWARE_LOCATION;
       log.info("Using default firmware location as " + config.firmwareLocation);
     }
 
-    if(argv["firmware"] != null) {
+    //Always we'll look for this file, otherwise we'll look at the database
+    if(argv["firmware"] != undefined ) {
       config.firmware = config.firmwareLocation + "/" + argv["firmware"];
-      log.debug("Using command line firmware argument : " + config.firmware);
+      log.debug("Using command line firmware argument : " + argv["firmware"]);
+    }
+
+    if(argv["db-location"] != null || config.dbLocation != null) {
+      config.dbLocation = argv["db-location"] || config.dbLocation;
+      db.device = new Datastore({ filename: config.dbLocation + "/device.db", autoload: true });
+      db.firmware = new Datastore({ filename: config.dbLocation + "/firmware.db", autoload: true });
+      log.info("Creating a persistent store in " + config.dbLocation);
     } else {
-      config.firmware = config.firmwareLocation + "/firmware.bin";
-      log.info("Using default firmware : " + config.firmware);
+      log.info("Creating a in-memory database");
+      db.device = new Datastore();
+      db.firmware = new Datastore();
     }
-
-    if(config.token == undefined) {
-      log.error("Token not present ...");
-      process.exit(-1);
-    }
-
   },
   start: function() {
 
     particle.getEventStream({ deviceId: 'mine', name:'spark/status', auth: config.token}).then(function(stream) {
       stream.on('event', function(data) {
-        //data = online
-        //deviceid = coreid
-        //published_at
         if(data.data == "online") {
+          log.info("The device " + data.coreid + " is online");
 
-          log.info("The device " + data.coreid + " is online; flashing firmware " + config.firmware);
+          //If the firmware name is defined we're going to use it
+          //TODO Validate this function
+          if(config.firmware != undefined) {
+            const hash = md5File.sync(config.firmware);
 
-          const hash = md5File.sync(config.firmware);
-          var firmware;
-
-          log.debug("Firmware hash " + hash);
-
-          flashList.forEach(function(firm, idx) {
-            if(firm.hash == hash) {
-              firmware = firm;
-            }
-          });
-
-          if(firmware == undefined) {
-            log.info("Flash index " + hash + " does not exist; flashing device " + data.coreid);
-            flashDevice(config.firmware, config.token, data.coreid);
-
-            flashList.push({
-              "hash": hash,
-              "devices":[data.coreid]
+            fetchDevice(data, config.firmwareLocation + "/" + config.firmware, function() {
+              console.log("Found");
             });
+
           } else {
-            var device;
-                //Check for each device
-            firmware.devices.forEach(function(dev, idx) {
-              if(dev == data.coreid) {
-                device = dev;
+            db.firmware.find({}).sort({"registrationDate":1}).exec(function(err, firmwareList) {
+              var len = Object.keys(firmwareList).length;
+
+              if(len == 0) {
+                log.error("No firmware found");
+              } else {
+                const firmware = firmwareList[0];
+
+                fetchDevice(data, config.firmwareLocation + "/" + firmware.name, function() {
+                  console.log("Found");
+                });
               }
             });
-
-            if(device == undefined) {
-              log.debug("Flash index " + hash + " exists but not for this device; flashing device " + core.id);
-              firmware.devices.push(data.coreid);
-              flashDevice(config.firmware, config.token, data.coreid);
-            } else {
-              log.warn("Device " + data.coreid + " already flashed");
-            }
           }
         }
       });
@@ -108,24 +100,57 @@ module.exports = {
 
     particle.getEventStream({ deviceId: 'mine', name:'spark/device/last_reset', auth: config.token}).then(function(stream) {
       stream.on('event', function(data) {
-        //console.log("RESET: ", data);
+        log.debut("Device reset: ", data);
       });
     });
 
     particle.getEventStream({ deviceId: 'mine', name:'spark/status/safe-mode', auth: config.token}).then(function(stream) {
       stream.on('event', function(data) {
-        console.log("SAFE MODE: ", data);
+        log.debug("Device in safe mode: ", data);
       });
+    });
+
+    //TODO detect when the file is removed to remove from definitions
+    fs.watch(config.firmwareLocation, (eventType, filename) => {
+      log.info("New firmware detected " + filename);
+      if (filename) {
+        db.firmware.insert({"name": filename, "version": 1, "default": true, createdAt: new Date()}, function (err, document) {
+          if(err) {
+            log.error("Error saving new firmware", err);
+          } else {
+            log.debug("Saved new firmware definition");
+          }
+        });
+      }
     });
   }
 };
 
-var flashDevice = function(firmware, token, device) {
+var fetchDevice = function(data, firmware, callback) {
+  const hash = md5File.sync(firmware);
+  //Check for each device
+  db.device.findOne({ device: data.coreid, firmwareHash: hash }, function (err, device) {
+    if(device == undefined) {
+      log.info("Device doesn't have this firmware");
+      flashDevice(firmware, config.token, data.coreid, hash);
+      callback();
+    } else {
+      log.warn("Device " + data.coreid + " already flashed");
+    }
+  });
+};
+var flashDevice = function(firmware, token, device, hash) {
   var flashProcess = particle.flashDevice({ deviceId: device, files: { file1: firmware }, auth: token });
 
   flashProcess.then(function(data) {
-      log.info('Device flashing started successfully:', data);
+      db.device.insert({"device": device, flashedAt: new Date(), firmwareHash: hash}, function (err, document) {
+        if(err) {
+          log.error("Error saving device flash process ", err);
+        } else {
+          log.info('Device flashing started successfully ', data);
+        }
+      });
     }, function(err) {
-      log.error('An error occurred while flashing the device:', err);
+      log.error('An error occurred while flashing the device ', err);
     });
 };
