@@ -1,3 +1,7 @@
+/**
+* author : maleficarum [ maleficarum.mx ]
+*/
+
 const bunyan = require('bunyan');
 const request = require('request');
 const Particle = require('particle-api-js');
