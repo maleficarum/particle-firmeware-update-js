@@ -50,6 +50,14 @@ module.exports = {
       log.info("Using default firmware location as " + config.firmwareLocation);
     }
 
+    //Verify if the firmware location exists.
+    try {
+      fs.statSync(config.firmwareLocation);
+    } catch(e) {
+      log.warn("Creating " + config.firmwareLocation + " cause doesn't exist");
+      fs.mkdirSync(config.firmwareLocation);
+    }
+
     //Always we'll look for this file, otherwise we'll look at the database
     if(argv["firmware"] != undefined ) {
       config.firmware = config.firmwareLocation + "/" + argv["firmware"];
@@ -61,9 +69,19 @@ module.exports = {
 
     if(argv["db-location"] != null || config.dbLocation != null) {
       config.dbLocation = argv["db-location"] || config.dbLocation;
+
+      //Verify if the firmware location exists.
+      try {
+        fs.statSync(config.dbLocation);
+      } catch(e) {
+        log.warn("Creating " + config.dbLocation + " cause doesn't exist");
+        fs.mkdirSync(config.dbLocation);
+      }
+
       db.device = new Datastore({ filename: config.dbLocation + "/device.db", autoload: true });
       db.firmware = new Datastore({ filename: config.dbLocation + "/firmware.db", autoload: true });
       log.info("Creating a persistent store in " + config.dbLocation);
+
     } else {
       log.info("Creating a in-memory database");
       db.device = new Datastore();
@@ -117,18 +135,33 @@ module.exports = {
       });
     });
 
-    //TODO detect when the file is removed to remove from definitions
     fs.watch(config.firmwareLocation, (eventType, filename) => {
-      log.info("New firmware detected " + filename);
-      if (filename) {
-        db.firmware.insert({"name": filename, "version": 1, "default": true, createdAt: new Date()}, function (err, document) {
-          if(err) {
-            log.error("Error saving new firmware", err);
-          } else {
-            log.debug("Saved new firmware definition");
-          }
-        });
-      }
+      const path = config.firmwareLocation + "/" + filename;
+      fs.stat(path, function(err, stat) {
+        if(err) {//The firmware doesn't exist anymore
+          db.firmware.remove({ "name": filename }, { multi: true }, function (err, numRemoved) {
+            log.info("Removed " + numRemoved + " firmware definitions");
+          });
+        } else {
+          log.info("New firmware detected " + filename);
+          const hash = md5File.sync(path);
+
+          //Check whether is the same firmware or it's different even with the same name
+          db.firmware.findOne({ "name": filename, "hash":hash }, function (err, device) {
+            if(device) {
+              log.warn("The firmware " + path + " already exists in the database.")
+            } else {
+              db.firmware.insert({"name": filename, "hash":hash, "version": 1, "default": true, createdAt: new Date()}, function (err, document) {
+                if(err) {
+                  log.error("Error saving new firmware", err);
+                } else {
+                  log.debug("Saved new firmware definition");
+                }
+              });
+            }
+          });
+        }
+      });
     });
   }
 };
