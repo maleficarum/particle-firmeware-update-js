@@ -71,6 +71,14 @@ also, the module may keep in memory (as default option) the firmware definicion 
 node app.js --token=<token> --db-location=/top/db/
 
 ```
+And, if you need to flash a specific firmware to a specific device you can to name your firmware file with the Particle device id, asumming your device has the ID ABCDE1234ABCDE1234ABCDE1234:
+
+```bash
+
+ABCDE1234ABCDE1234ABCDE1234ABCDE1234.bin
+
+```
+ so you can diferentiate which firmware goes to which device.
 
 #### Start
 
@@ -81,6 +89,28 @@ Start listening for events
 p.start();
 
 ```
+
+#### Command line options
+
+- token : (Mandatory). Your particle token associated to your account.
+- firmware : (Optional. Default firmware.bin). The name of your latest firmware to flash.
+- firmware-location : (Optional. Default ./firmware). The directory where the module will look for a firmware file.
+- db-location : (Optional). If you specify this path, your DB will be on memory, otherwise the database will be stored in that location.
+
+#### JSON Config options
+
+- token : (Mandatory). Your particle token associated to your account.
+- firmware : (Optional. Default firmware.bin). The name of your latest firmware to flash.
+- firmwareLocation : (Optional. Default ./firmware). The directory where the module will look for a firmware file.
+- dbLocation : (Optional). If you specify this path, your DB will be on memory, otherwise the database will be stored in that location.
+
+----------
+
+New in version 2.1.2
+-------------
+
+- Now you can target a specific firmware to a specific device
+
 
 ----------
 
