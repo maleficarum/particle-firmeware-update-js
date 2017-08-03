@@ -1,3 +1,5 @@
+[![Known Vulnerabilities](https://snyk.io/test/github/maleficarum/particle-firmeware-update-js/badge.svg)](https://snyk.io/test/github/maleficarum/particle-firmeware-update-js)
+
 Particle Firmware Update
 ===================
 
