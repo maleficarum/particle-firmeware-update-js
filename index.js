@@ -3,13 +3,17 @@
 */
 
 const bunyan = require('bunyan');
-const request = require('request');
+const path = require('path');
+//const request = require('request');
 const Particle = require('particle-api-js');
 const particle = new Particle();
 const argv = require('minimist')(process.argv.slice(2));
 const fs = require("fs");
 const md5File = require('md5-file');
 const Datastore = require('nedb');
+const exphbs  = require('express-handlebars');
+const express = require('express');
+var app = express();
 
 var config;
 var flashList = [];
@@ -87,7 +91,7 @@ module.exports = {
       db.firmware = new Datastore();
     }
   },
-  start: function() {
+  start: function(customApp) {
 
     particle.getEventStream({ deviceId: 'mine', name:'spark/status', auth: config.token}).then(function(stream) {
       stream.on('event', function(data) {
@@ -165,6 +169,20 @@ module.exports = {
         }
       });
     });
+
+    if(argv["no-ui"]  == undefined) {
+      if(customApp != undefined) {
+        app = customApp;
+        initWebApp();
+        log.info("Using custom express app");
+      } else {
+        app.listen(3000, function () {
+          log.info('Update Service listening on port ' + config.port);
+        });
+      }
+    } else {
+      log.warn("No UI started.");
+    }
   }
 };
 
@@ -206,5 +224,22 @@ var flashDevice = function(firmware, token, device, hash) {
     });
   }, function(err) {
     log.error('An error occurred while flashing the device ', err);
+  });
+};
+
+var initWebApp = function() {
+  app.engine('handlebars', exphbs({defaultLayout: 'main', layoutsDir: path.join(__dirname, 'views/layouts')}));
+  app.set('view engine', 'handlebars');
+
+  app.use(express.static(path.join(__dirname, 'public')));
+  app.set('views', path.join(__dirname, 'views'));
+
+  app.get('/', adminWebRoot);
+};
+
+var adminWebRoot = function(req, res) {
+  //Fetch all the firmware
+  db.firmware.find({}).sort({"registrationDate":1}).exec(function(err, firmwareList) {
+      res.render('index', { title: 'Wemos Update Site', firmwareList: firmwareList });
   });
 };

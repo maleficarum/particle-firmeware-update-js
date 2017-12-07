@@ -120,3 +120,7 @@ New in version 2.0.1
 -------------
 
 - Now the module uses bedb as a database to keep in memory or in the file system the firmware definition and flashing history
+
+If the project is useful for you ... buy me a coffee
+
+[![Buy me a coffee](https://az743702.vo.msecnd.net/cdn/kofi3.png?v=0 "Buy me a coffee")](https://ko-fi.com/Q5Q569GK)
